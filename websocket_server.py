@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import json
 import assemblyai as aai
-from assemblyai.extras import MicrophoneStream
+from assemblyai.extras import MicrophoneStream  # Import MicrophoneStream
 import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +11,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import threading
 import socket
 from dotenv import load_dotenv
+import wave  # Import wave module
+import pyaudio
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # Set your AssemblyAI API key dynamically from environment variables
 def get_assemblyai_api_key():
     api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -31,7 +34,43 @@ def get_assemblyai_api_key():
     logger.info(f"Loaded API Key: {api_key}")
     return api_key
 
+
 aai.settings.api_key = get_assemblyai_api_key()
+
+
+class MicrophoneStream:  # Modified MicrophoneStream for debugging
+    def __init__(self, sample_rate):
+        self.sample_rate = sample_rate
+        self.chunk = 1024
+        self.p = pyaudio.PyAudio()
+        self.stream = self.p.open(format=pyaudio.paInt16,
+                                    channels=1,
+                                    rate=self.sample_rate,
+                                    input=True,
+                                    frames_per_buffer=self.chunk)
+
+        self.frames = []  # Store frames for debugging
+
+    def generator(self):
+        while True:
+            data = self.stream.read(self.chunk)
+            self.frames.append(data)  # Append to frames for debugging
+            yield data
+
+    def close(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()
+
+        # Save frames to a wave file for debugging
+        wf = wave.open("output.wav", 'wb')
+        wf.setnchannels(1)
+        wf.setsampwidth(self.p.get_sample_size(pyaudio.paInt16))
+        wf.setframerate(self.sample_rate)
+        wf.writeframes(b''.join(self.frames))
+        wf.close()
+        print("Saved audio to output.wav")  # Add log for confirming save
+
 
 class TranscriptionManager:
     def __init__(self, loop):
@@ -81,6 +120,7 @@ class TranscriptionManager:
     def on_error(self, error):
         """Handle transcription errors."""
         logger.error(f"AssemblyAI Error: {error}")
+        logger.error(f"AssemblyAI Error details: {error.__dict__}")  # Log detailed error info
         asyncio.run_coroutine_threadsafe(
             self.send_message({"type": "error", "text": str(error)}), self.loop
         )
@@ -118,7 +158,7 @@ class TranscriptionManager:
             )
             logger.info("Connecting to AssemblyAI...")
             self.transcriber.connect()  # Add more logging around connection
-            logger.info("Connected to AssemblyAI.")
+            logger.info(f"Connected to AssemblyAI. Session ID: {self.transcriber.session_id}, URL: {self.transcriber.url}")  # Log session info
 
             self.microphone_stream = MicrophoneStream(sample_rate=16_000)
             logger.info("Starting transcription stream...")
@@ -189,6 +229,7 @@ async def handle_websocket(websocket, path, loop):
         logger.info("handle_websocket finally block, stopping transcription.")
         await manager.stop_transcription()
 
+
 def start_webserver(port, directory):
     """Start a simple web server to serve static files."""
     class Handler(SimpleHTTPRequestHandler):
@@ -197,6 +238,7 @@ def start_webserver(port, directory):
     httpd = HTTPServer(("", port), Handler)
     logger.info(f"Web server running on http://localhost:{port}")
     httpd.serve_forever()
+
 
 async def main():
     """Start the WebSocket server."""
@@ -229,6 +271,7 @@ async def main():
     ):
         logger.info(f"WebSocket server running on ws://{host}:{port}")
         await asyncio.Future()  # Run forever
+
 
 if __name__ == "__main__":
     try:
