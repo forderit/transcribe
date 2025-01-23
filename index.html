@@ -22,7 +22,7 @@
 
         // Set WebSocket URL dynamically
         const socketUrl = window.location.hostname === "localhost"
-            ? "ws://localhost:8765"
+            ? "ws://localhost:8080"
             : "wss://" + window.location.hostname;
 
         function updateStatus(message, isError = false) {
