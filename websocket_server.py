@@ -182,7 +182,7 @@ async def main():
 
     # Determine the host and port dynamically based on the environment
     host = "0.0.0.0" if os.getenv("RAILWAY_ENVIRONMENT") else "localhost"
-    port = int(os.getenv("PORT", 8765))  # Default to 8765 for local testing
+    port = int(os.getenv("PORT", 8080))  # Default to 8080 for Railway
 
     # Find a free port for the web server.
     webserver_port = 8000
