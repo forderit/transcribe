@@ -11,6 +11,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import threading
 import socket
 from dotenv import load_dotenv
+from aiohttp import web
+from aiohttp_cors import setup, ResourceOptions
 
 # Load environment variables from .env file
 load_dotenv()
@@ -199,13 +201,34 @@ async def main():
     webserver_thread.daemon = True  # Makes sure the thread exits when the program exits
     webserver_thread.start()
 
-    async with websockets.serve(
+    # Create an aiohttp web application for handling CORS
+    app = web.Application()
+    cors = setup(app, defaults={
+        "*": ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+        )
+    })
+
+    # Add the websocket handler to the aiohttp app
+    app.add_routes([web.get('/ws', lambda request: websockets.serve(
         lambda ws, path: handle_websocket(ws, path, loop),
         host,
         port,
-    ):
-        logger.info(f"WebSocket server running on ws://{host}:{port}")
-        await asyncio.Future()  # Run forever
+    ))])
+
+    # Register CORS for the route
+    for route in list(app.router.routes()):
+        cors.add(route)
+
+    logger.info(f"WebSocket server running on ws://{host}:{port}")
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host, port)
+    await site.start()
+
+    await asyncio.Future()  # Run forever
 
 
 if __name__ == "__main__":
