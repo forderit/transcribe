@@ -11,8 +11,6 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import threading
 import socket
 from dotenv import load_dotenv
-from aiohttp import web
-from aiohttp_cors import setup, ResourceOptions
 
 # Load environment variables from .env file
 load_dotenv()
@@ -56,7 +54,9 @@ class TranscriptionManager:
 
     def on_data(self, transcript):
         """Handle transcription data."""
+        logger.info("TranscriptionManager.on_data called")  # Add logging
         if self.terminated:
+            logger.info("TranscriptionManager.on_data - terminated, returning")
             return
 
         if transcript.text == "":
@@ -66,10 +66,12 @@ class TranscriptionManager:
             return
 
         if isinstance(transcript, aai.RealtimeFinalTranscript):
+            logger.info(f"Received final transcript: {transcript.text}")
             asyncio.run_coroutine_threadsafe(
                 self.send_message({"type": "final", "text": transcript.text}), self.loop
             )
         else:
+            logger.info(f"Received partial transcript: {transcript.text}")
             asyncio.run_coroutine_threadsafe(
                 self.send_message({"type": "partial", "text": transcript.text}), self.loop
             )
@@ -97,6 +99,8 @@ class TranscriptionManager:
 
     async def start_transcription(self, websocket):
         """Start transcription."""
+        logger.info("start_transcription called")  # Add log
+
         if self.running:
             logger.warning("Transcription is already running. Restarting...")
             await self.stop_transcription()
@@ -113,7 +117,8 @@ class TranscriptionManager:
                 on_open=self.on_open,
             )
             logger.info("Connecting to AssemblyAI...")
-            self.transcriber.connect()
+            self.transcriber.connect()  # Add more logging around connection
+            logger.info("Connected to AssemblyAI.")
 
             self.microphone_stream = MicrophoneStream(sample_rate=16_000)
             logger.info("Starting transcription stream...")
@@ -122,6 +127,7 @@ class TranscriptionManager:
                 self.transcriber.stream,
                 self.microphone_stream,
             )
+            logger.info("Transcription stream started.")
         except Exception as e:
             logger.error(f"Error during transcription: {e}")
             await self.send_message({"type": "error", "text": str(e)})
@@ -129,6 +135,8 @@ class TranscriptionManager:
 
     async def stop_transcription(self):
         """Stop transcription."""
+        logger.info("stop_transcription called")
+
         if not self.running:
             logger.info("No transcription is running to stop.")
             return
@@ -137,12 +145,18 @@ class TranscriptionManager:
         self.running = False
 
         if self.microphone_stream:
+            logger.info("Closing microphone stream")
             self.microphone_stream.close()
             self.microphone_stream = None
+        else:
+            logger.info("Microphone stream is already None.")
 
         if self.transcriber:
+            logger.info("Closing transcriber")
             self.transcriber.close()
             self.transcriber = None
+        else:
+            logger.info("Transcriber is already None.")
 
         await self.send_message({"type": "status", "text": "Transcription stopped"})
         logger.info("Transcription fully stopped.")
@@ -153,20 +167,27 @@ async def handle_websocket(websocket, path, loop):
     manager = TranscriptionManager(loop)
 
     try:
+        logger.info(f"WebSocket connected from path: {path}")  # Log the path
+
         async for message in websocket:
-            logger.info(f"Received WebSocket message: {message}")
+            logger.info(f"Received WebSocket message: {message}")  # Log the message
             if message == "start":
+                logger.info("Starting transcription")  # Log before starting
                 await manager.start_transcription(websocket)
+                logger.info("Transcription started")  # Log after starting
             elif message == "stop":
-                logger.info("Stop command received.")
+                logger.info("Stopping transcription")
                 await manager.stop_transcription()
+                logger.info("Transcription stopped")
             else:
                 logger.warning(f"Unknown command received: {message}")
     except websockets.exceptions.ConnectionClosed:
         logger.info("WebSocket connection closed.")
+    except Exception as e:  # Catch any other exceptions
+        logger.error(f"Error in handle_websocket: {e}")  # Log the exception
     finally:
+        logger.info("handle_websocket finally block, stopping transcription.")
         await manager.stop_transcription()
-
 
 def start_webserver(port, directory):
     """Start a simple web server to serve static files."""
@@ -176,7 +197,6 @@ def start_webserver(port, directory):
     httpd = HTTPServer(("", port), Handler)
     logger.info(f"Web server running on http://localhost:{port}")
     httpd.serve_forever()
-
 
 async def main():
     """Start the WebSocket server."""
