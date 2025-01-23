@@ -3,3 +3,4 @@ assemblyai>=0.17.0
 python-socketio>=5.1.0
 aiohttp-cors>=0.7.0
 python-dotenv>=0.19.2
+websockets
