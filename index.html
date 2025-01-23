@@ -99,7 +99,7 @@
 
             socket.onerror = (error) => {
                 console.error('Transcription socket error:', error);
-                updateStatus('Error connecting to server.', true);
+                updateStatus('Error connecting to server: ' + error.message, true); // Include error message
                 isConnecting = false;
                 setButtonState(true);
             };
@@ -123,11 +123,11 @@
             }
         });
 
-        window.addEventListener('beforeunload', () => {
+       /* window.addEventListener('beforeunload', () => { // Removed beforeunload
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.close();
             }
-        });
+        });*/
     </script>
 </body>
 </html>
